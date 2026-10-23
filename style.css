@@ -1,0 +1,304 @@
+/* =====================================================================
+   style.css: how every page in this folder looks.
+
+   The first three sections are the controls:
+     1. Fonts, shared by every page
+     2. Colours for the chat bot
+     3. Colours for the mirror bot
+   Change a value, save this file, then refresh the page in your browser.
+
+   Everything after that is layout. You only need to touch it if you want
+   to move things around.
+   ===================================================================== */
+
+
+/* ---------------------------------------------------------------------
+   1. ADAPT: fonts, shared by every page
+
+   The pages use Rubik and Roboto Mono if they're installed on this laptop
+   or saved in a "fonts" folder (as Rubik.woff2 and RobotoMono.woff2).
+   Otherwise they fall back to your system's fonts.
+   Nothing is downloaded from the internet.
+   --------------------------------------------------------------------- */
+
+@font-face { font-family: "Rubik"; src: local("Rubik"), url("fonts/Rubik.woff2") format("woff2"); font-weight: 300 700; }
+@font-face { font-family: "Roboto Mono"; src: local("Roboto Mono"), url("fonts/RobotoMono.woff2") format("woff2"); font-weight: 300 700; }
+
+:root {
+  --font: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;   /* main text */
+  --mono: "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;     /* your messages, labels, the prompt */
+}
+
+
+/* ---------------------------------------------------------------------
+   2. ADAPT: colours for the chat bot (chat.html)
+   --------------------------------------------------------------------- */
+
+body.chat {
+  --page: #fce9de;          /* pale peach background */
+  --sidebar: #e7857a;       /* coral sidebar */
+  --you: #f8d3ce;           /* your messages */
+  --prompt: #f5dcd3;        /* the "prompt sent to model" block */
+  --prompt-line: #e0a89b;   /* its border */
+  --send: #e85a5a;          /* send button */
+  --ink: #3a2a26;           /* main text, and text on the sidebar */
+  --muted: #7d5f57;         /* quieter text */
+  --label: #9b3f33;         /* labels inside the prompt block */
+  --white: #ffffff;         /* input box */
+}
+
+
+/* ---------------------------------------------------------------------
+   3. ADAPT: colours for the mirror bot (mirror.html)
+   --------------------------------------------------------------------- */
+
+body.mirror {
+  --page: #efebf6;          /* lavender background */
+  --card: #fdfcff;          /* writing box and reflections */
+  --ink: #26232d;           /* main text */
+  --muted: #6b6578;         /* quieter text */
+  --accent: #6a4fc4;        /* button and reflection edge */
+  --line: #dcd5e8;          /* borders */
+}
+
+
+/* =====================================================================
+   LAYOUT: everything below arranges the pages.
+
+   EXTEND: new forms start here. A deck of cards to draw from, notes in the
+   margin of your writing, a slower page that reveals one line at a time.
+   Teaches: that a bot doesn't have to look like a chat window.
+   ===================================================================== */
+
+* { box-sizing: border-box; }
+
+/* A clear outline for whatever the keyboard is on */
+:focus-visible { outline: 3px solid #1a1a1a; outline-offset: 2px; }
+
+/* Shown when there's a typo in the code, so the page isn't just blank */
+.typo {
+  position: fixed; top: 12px; left: 12px; right: 12px; z-index: 10;
+  background: #fff3c4; color: #2b2400; border: 2px solid #c9a227; border-radius: 12px;
+  padding: 14px 16px; font-family: var(--font); font-size: 16px; line-height: 1.5;
+}
+
+
+/* ---- Chat: page and sidebar ---- */
+
+body.chat {
+  margin: 0; height: 100vh; background: var(--page); color: var(--ink);
+  font-family: var(--font); font-size: 16px; line-height: 1.55;
+  display: grid; grid-template-columns: 260px 1fr;
+}
+.chat aside {
+  background: var(--sidebar); color: var(--ink);
+  padding: 28px 22px; display: flex; flex-direction: column; gap: 18px;
+  overflow-y: auto;
+}
+.chat aside h1 { margin: 0; font-size: 28px; font-weight: 600; }
+.chat .setting { display: flex; flex-direction: column; gap: 6px; }
+.chat .setting label, .chat .setting-label { font-family: var(--mono); font-size: 12px; }
+.chat aside select {
+  width: 100%; font-family: var(--mono); font-size: 12px; color: var(--ink);
+  background: var(--white); border: 0; border-radius: 10px; padding: 7px 8px;
+}
+.chat aside input[type="range"] { width: 100%; accent-color: var(--ink); }
+.chat .notes-status { margin: 0; font-family: var(--mono); font-size: 12px; }
+.chat aside details { font-size: 13px; }
+.chat aside summary { cursor: pointer; font-family: var(--mono); }
+.chat aside .instructions {
+  margin-top: 8px; padding: 10px; border-radius: 10px;
+  background: rgba(255,255,255,0.35); white-space: pre-wrap; font-family: var(--mono); font-size: 12px;
+}
+.chat .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.chat .buttons.end { margin-top: auto; }
+.chat aside button {
+  font: inherit; font-size: 13px; color: var(--ink); background: rgba(255,255,255,0.35);
+  border: 1px solid var(--ink); border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+.chat aside button.link {
+  align-self: flex-start; background: none; border: 0; padding: 0;
+  font-family: var(--mono); font-size: 12px; text-decoration: underline;
+}
+
+/* ---- Chat: the conversation ---- */
+
+.chat main { display: flex; flex-direction: column; height: 100vh; min-width: 0; }
+.chat #conversation { flex: 1; overflow-y: auto; padding: 32px 24px 16px; }
+.chat .column { max-width: 720px; margin: 0 auto; }
+.chat .empty { color: var(--muted); text-align: center; margin-top: 18vh; }
+.chat .turn { margin-bottom: 28px; }
+
+.chat .you {
+  margin-left: auto; max-width: 80%; width: fit-content;
+  background: var(--you); padding: 12px 16px; border-radius: 18px 18px 4px 18px;
+  font-family: var(--mono); font-size: 14px; white-space: pre-wrap;
+}
+
+/* The "prompt sent to model" block: open on the latest turn,
+   a dashed pill on earlier turns. Click to open or close. */
+.chat details.prompt { margin: 12px 0; }
+.chat details.prompt summary {
+  list-style: none; cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--muted);
+}
+.chat details.prompt summary::-webkit-details-marker { display: none; }
+.chat details.prompt[open] {
+  background: var(--prompt); border: 1px solid var(--prompt-line);
+  border-radius: 14px; padding: 12px 14px;
+}
+.chat details.prompt[open] summary { margin-bottom: 8px; color: var(--ink); }
+.chat details.prompt:not([open]) summary {
+  display: inline-block; border: 1px dashed var(--prompt-line);
+  border-radius: 999px; padding: 4px 12px;
+}
+.chat .part { margin: 8px 0 0; font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; }
+.chat .part .role { display: block; font-weight: 600; color: var(--label); }
+.chat .part.notes { padding-left: 10px; border-left: 3px solid var(--prompt-line); }
+
+/* The model's reasoning text, for models that write it out */
+.chat details.thinking, .mirror details.thinking { margin: 6px 0 10px; font-size: 13px; color: var(--muted); }
+.chat details.thinking summary, .mirror details.thinking summary { cursor: pointer; font-family: var(--mono); font-size: 12px; }
+.thinking-text { white-space: pre-wrap; font-style: italic; margin-top: 6px; max-height: 240px; overflow-y: auto; }
+
+.chat .bot { white-space: pre-wrap; font-size: 16.5px; }
+.chat .bot.error { color: #a23a26; }
+
+.chat .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chat .chip {
+  font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+  background: rgba(255,255,255,0.6); border-radius: 999px; padding: 3px 10px; cursor: help;
+}
+.chat button.chip { border: 1px solid var(--prompt-line); cursor: pointer; }
+
+/* ---- Chat: the message box ---- */
+
+.chat form { padding: 12px 24px 24px; }
+.chat .pill {
+  max-width: 720px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px;
+  background: var(--white); border-radius: 28px; padding: 8px 8px 8px 20px;
+  box-shadow: 0 2px 10px rgba(160, 90, 70, 0.12);
+}
+.chat textarea {
+  flex: 1; border: 0; outline: none; resize: none; height: 40px; max-height: 160px;
+  padding: 9px 0; font: inherit; color: var(--ink); background: transparent;
+}
+.chat .send {
+  flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0;
+  background: var(--send); color: var(--white); font-size: 18px; cursor: pointer;
+}
+.chat .send:disabled { opacity: 0.5; cursor: wait; }
+/* The microphone button, added by voice.js */
+.chat .mic { background: var(--white); color: var(--ink); border: 1px solid var(--prompt-line); font-size: 16px; }
+.chat .mic.listening { background: var(--send); color: var(--white); border-color: var(--send); }
+
+/* ---- Chat on small screens, or zoomed in: the sidebar sits above the conversation ---- */
+
+@media (max-width: 700px) {
+  body.chat { display: block; height: auto; }
+  .chat aside { padding: 16px; gap: 12px; }
+  .chat aside h1 { font-size: 22px; }
+  .chat main { height: auto; min-height: 70vh; }
+  .chat #conversation { padding: 20px 16px 8px; }
+  .chat form { padding: 8px 16px 16px; position: sticky; bottom: 0; background: var(--page); }
+}
+
+
+/* ---- Mirror: page ---- */
+
+body.mirror {
+  margin: 0; background: var(--page); color: var(--ink);
+  font-family: var(--font); font-size: 16px; line-height: 1.55;
+}
+.mirror .page { max-width: 760px; margin: 0 auto; padding: 24px 20px 60px; }
+
+.mirror header { margin-bottom: 20px; }
+.mirror header h1 { margin: 0; font-size: 22px; letter-spacing: 0.04em; text-transform: uppercase; }
+.mirror header p { margin: 4px 0 0; color: var(--muted); }
+.mirror .controls {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px;
+  font-family: var(--mono); font-size: 13px; color: var(--muted);
+}
+.mirror .controls .pair { display: inline-flex; align-items: center; gap: 8px; }
+.mirror .controls input[type="range"] { accent-color: var(--accent); width: 120px; }
+.mirror header select {
+  font-family: var(--mono); font-size: 13px; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px;
+}
+
+/* ---- Mirror: the writing box ---- */
+
+.mirror .writing {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 14px; padding: 16px;
+}
+.mirror .writing label { display: block; font-weight: 600; margin-bottom: 8px; }
+.mirror textarea {
+  width: 100%; min-height: 200px; resize: vertical; padding: 12px;
+  border: 1px solid var(--line); border-radius: 10px;
+  font-family: var(--font); font-size: 16px; color: var(--ink); background: white;
+}
+.mirror .row { display: flex; gap: 12px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.mirror .row .file { font-size: 14px; color: var(--muted); }
+.mirror .row .file label { display: inline; font-weight: 400; margin: 0; }
+.mirror .row button { margin-left: auto; }
+.mirror button {
+  font: inherit; border: 0; border-radius: 999px; padding: 10px 20px;
+  background: var(--accent); color: white; cursor: pointer;
+}
+.mirror button:disabled { opacity: 0.5; cursor: wait; }
+
+/* ---- Mirror: the reflections ---- */
+
+.mirror .reflections-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 32px 0 12px; }
+.mirror .reflections-head h2 { margin: 0; }
+.mirror button.quiet, .mirror button.copy {
+  background: transparent; color: var(--accent); border: 1px solid var(--accent);
+  padding: 5px 14px; font-size: 13px;
+}
+.mirror button.copy { margin-top: 10px; }
+.mirror h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 32px 0 12px; }
+.mirror .empty { color: var(--muted); }
+
+.mirror .reflection {
+  background: var(--card); border-left: 4px solid var(--accent);
+  border-radius: 0 12px 12px 0; padding: 14px 16px; margin-bottom: 16px;
+}
+.mirror .reflection time { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.mirror .reflection .text { white-space: pre-wrap; font-size: 17px; margin-top: 6px; }
+.mirror .reflection.error { border-left-style: dashed; }
+
+/* The "prompt sent to model" panel */
+.mirror details.sent { margin-top: 10px; font-size: 13px; }
+.mirror details.sent summary { cursor: pointer; color: var(--muted); font-family: var(--mono); }
+.mirror details.sent .part { margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--line); background: var(--page); white-space: pre-wrap; font-family: var(--mono); max-height: 240px; overflow-y: auto; }
+.mirror details.sent .role { display: block; color: var(--accent); font-weight: 600; }
+
+/* ---- Guide (guide.html): the README as a page ---- */
+
+body.guide {
+  --page: #fffaf6; --ink: #2b2623; --muted: #6e645c;
+  --accent: #b5442b; --line: #eadfd5; --code: #f6ece4;
+  margin: 0; background: var(--page); color: var(--ink);
+  font-family: var(--font); font-size: 17px; line-height: 1.6;
+}
+.guide .page { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+.guide header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.guide header h1 { margin: 0; font-size: 28px; }
+.guide nav { display: flex; gap: 16px; font-family: var(--mono); font-size: 14px; }
+.guide a { color: var(--accent); }
+.guide h2 { margin: 44px 0 10px; font-size: 22px; }
+.guide h3 { margin: 28px 0 6px; font-size: 18px; }
+.guide code { font-family: var(--mono); font-size: 0.88em; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.guide pre {
+  position: relative; background: var(--code); border: 1px solid var(--line);
+  border-radius: 10px; padding: 14px 16px; overflow-x: auto;
+}
+.guide pre code { background: none; padding: 0; font-size: 14px; }
+.guide pre .copy {
+  position: absolute; top: 8px; right: 8px; font: inherit; font-family: var(--mono); font-size: 12px;
+  background: var(--page); color: var(--ink); border: 1px solid var(--line); border-radius: 999px;
+  padding: 3px 10px; cursor: pointer;
+}
+.guide table { border-collapse: collapse; width: 100%; font-size: 15px; }
+.guide th, .guide td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.guide li { margin: 4px 0; }

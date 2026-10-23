@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DIY Bot: getting ready</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  :root {
+    --paper: #f7f2ea; --card: #fffdf9; --ink: #2b2623; --muted: #6e645c;
+    --line: #e6ddd2; --good: #2f8a57; --bad: #c8452c; --wait: #c9a227; --code: #f1e8de;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font); line-height: 1.5; font-size: 16px; }
+  .page { max-width: 680px; margin: 0 auto; padding: 32px 20px 60px; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  .intro { color: var(--muted); margin: 0 0 24px; }
+
+  .check {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
+  }
+  .light { flex: none; width: 18px; height: 18px; border-radius: 50%; margin-top: 4px; background: var(--line); }
+  .check.wait .light { background: var(--wait); animation: pulse 1s infinite alternate; }
+  .check.good .light { background: var(--good); }
+  .check.bad .light { background: var(--bad); }
+  @keyframes pulse { to { opacity: 0.35; } }
+  .check > div { flex: 1; min-width: 0; }
+  .check h2 { margin: 0; font-size: 17px; }
+  .detail { margin-top: 4px; color: var(--muted); }
+  .check.bad .detail { color: var(--ink); }
+  .detail p { margin: 6px 0; }
+  .detail ol { margin: 8px 0; padding-left: 22px; }
+  .detail li { margin: 8px 0; }
+
+  code { font-family: var(--mono); background: var(--code); padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .command {
+    display: flex; gap: 8px; align-items: flex-start; margin: 8px 0;
+    background: var(--code); border-radius: 10px; padding: 10px 10px 10px 12px;
+  }
+  .command code { flex: 1; background: none; padding: 0; white-space: pre-wrap; word-break: break-all; font-size: 13.5px; }
+  .tabs { display: flex; gap: 6px; margin: 10px 0 4px; }
+
+  button {
+    font: inherit; border: 0; border-radius: 999px; padding: 10px 20px;
+    background: var(--ink); color: white; cursor: pointer;
+  }
+  .command button, .tabs button { padding: 5px 12px; font-size: 13px; }
+  .tabs button { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .tabs button[aria-pressed="true"] { background: var(--ink); color: white; }
+
+  .summary { margin: 24px 0 12px; font-size: 18px; font-weight: 600; }
+  .next a { color: var(--ink); }
+  .note { color: var(--muted); font-size: 14px; }
+  details.more { margin-top: 32px; color: var(--muted); }
+  details.more summary { cursor: pointer; }
+  details.more p { margin: 8px 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Getting ready</h1>
+  <p class="intro">Follow the step this page shows you. It checks again by itself every few seconds, so you don't need to refresh. Three green lights and you're ready.</p>
+
+  <div aria-live="polite">
+    <div class="check" id="c1"><span class="light"></span><div><h2>Ollama is running, and this page can talk to it</h2><div class="detail">Checking…</div></div></div>
+    <div class="check" id="c2"><span class="light"></span><div><h2>A model is downloaded</h2><div class="detail">Waiting…</div></div></div>
+    <div class="check" id="c3"><span class="light"></span><div><h2>A model can reply</h2><div class="detail">Waiting…</div></div></div>
+  </div>
+
+  <p class="summary" id="summary"></p>
+  <p class="next" id="next" hidden>Next, open <a href="chat.html">chat.html</a> or <a href="mirror.html">mirror.html</a>.</p>
+  <button id="again" type="button">Check again</button>
+
+  <details class="more">
+    <summary>More details: what the setup line does</summary>
+    <p>Your browser normally stops pages opened from your own files from talking to programs on your laptop. The setup line tells Ollama to accept them. It's the setting that decides which pages can talk to your bot.</p>
+    <p>While it's set, any website open in your browser could also send requests to Ollama: use your models, or download or delete them. It can't reach your files. That's fine for today. To undo it afterwards:</p>
+    <p><b>Mac</b> (it also resets when you restart your laptop): <code>launchctl unsetenv OLLAMA_ORIGINS</code>, then quit and reopen Ollama.</p>
+    <p><b>Windows:</b> <code>[Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS", $null, "User")</code>, then quit and reopen Ollama.</p>
+    <p>If you'd rather not change the setting, and you have Python, open the pages through a small local server instead: in this folder run <code>python3 -m http.server 8000</code>, then open <code>localhost:8000/check.html</code>. Ollama already trusts pages opened that way.</p>
+  </details>
+</div>
+
+<script>
+// The model to suggest. Any model from ollama.com/library works.
+const SUGGESTED = "ministral-3:3b";
+const OLLAMA_URL = "http://localhost:11434";
+
+// Which computer this is, so the steps match it. You can switch with the buttons.
+let system = /Win/i.test(navigator.userAgent) ? "windows" : "mac";
+
+const OPEN_TERMINAL = {
+  mac: "Open <b>Terminal</b>: press <b>Cmd + Space</b>, type <i>Terminal</i>, then press Enter.",
+  windows: "Open <b>PowerShell</b>: press the <b>Windows key</b>, type <i>PowerShell</i>, then press Enter."
+};
+const PASTE = {
+  mac: "Paste with <b>Cmd + V</b>, then press Enter.",
+  windows: "Paste with <b>Ctrl + V</b> (or right-click), then press Enter."
+};
+
+function command(text) {
+  return '<div class="command"><code>' + text.replace(/&/g, "&amp;").replace(/</g, "&lt;") +
+         '</code><button type="button" class="copy">copy</button></div>';
+}
+
+function tabs() {
+  return '<div class="tabs" role="group" aria-label="Your computer">' +
+    '<button type="button" data-system="mac" aria-pressed="' + (system === "mac") + '">Mac</button>' +
+    '<button type="button" data-system="windows" aria-pressed="' + (system === "windows") + '">Windows</button></div>';
+}
+
+// The setup step, for when Ollama is running but this page isn't allowed to talk to it.
+function setupSteps() {
+  if (system === "mac") {
+    return tabs() +
+      "<p>One line sets everything up and downloads a model.</p><ol>" +
+      "<li>" + OPEN_TERMINAL.mac + "</li>" +
+      "<li>Copy this line. " + PASTE.mac +
+        command('launchctl setenv OLLAMA_ORIGINS "*"; pkill -x Ollama; pkill -x ollama; sleep 3; open -a Ollama; sleep 5; ollama pull ' + SUGGESTED) + "</li>" +
+      "<li>Ollama closes and opens again, then the download starts. This page goes green when it's done.</li></ol>";
+  }
+  return tabs() + "<ol>" +
+    "<li>" + OPEN_TERMINAL.windows + "</li>" +
+    "<li>Copy this line. " + PASTE.windows +
+      command('[Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS", "*", "User")') + "</li>" +
+    "<li>Quit Ollama: right-click the llama icon near the clock (click <b>^</b> if you can't see it) and choose <b>Quit Ollama</b>. Then open Ollama again from the Start menu.</li>" +
+    "<li>Back in PowerShell, copy this line, paste it and press Enter. It downloads a model." +
+      command("ollama pull " + SUGGESTED) + "</li></ol>";
+}
+
+// The download step, for when everything is connected but no model is downloaded yet.
+function downloadSteps() {
+  return tabs() + "<ol>" +
+    "<li>" + OPEN_TERMINAL[system] + "</li>" +
+    "<li>Copy this line. " + PASTE[system] + command("ollama pull " + SUGGESTED) + "</li>" +
+    '<li>Wait for the download to finish. It can take a few minutes.</li></ol>';
+}
+
+let lastShown = {};
+function set(id, state, html) {
+  const key = state + "|" + html;
+  if (lastShown[id] === key) return;   // nothing changed, so leave the page alone
+  lastShown[id] = key;
+  const el = document.getElementById(id);
+  el.className = "check " + state;
+  el.querySelector(".detail").innerHTML = html;
+}
+
+// Can this page reach Ollama? Three possible answers.
+async function reachOllama() {
+  try {
+    const res = await fetch(OLLAMA_URL + "/api/version");
+    if (res.ok) return { state: "ok", version: (await res.json()).version };
+  } catch (err) { /* blocked, or not running: find out which below */ }
+  try {
+    // This kind of request can't read the reply, but it does show whether Ollama answered.
+    await fetch(OLLAMA_URL + "/api/version", { mode: "no-cors" });
+    return { state: "blocked" };
+  } catch (err) {
+    return { state: "down" };
+  }
+}
+
+let running = false, done = false, tested = null;
+
+// Models made for search (embeddings), such as nomic-embed-text, can't chat.
+function canChat(m) {
+  const family = (m.details && m.details.family) || "";
+  return !/embed|minilm|rerank/i.test(m.name) && !/bert/i.test(family);
+}
+
+async function runChecks() {
+  if (running) return;
+  running = true;
+  try {
+    // 1. Is Ollama running, and can this page reach it?
+    const reach = await reachOllama();
+    if (reach.state === "down") {
+      set("c1", "bad", "<p>Open the <b>Ollama</b> app. On a Mac it's in Applications; on Windows, in the Start menu. Wait a few seconds and this page will notice.</p>" +
+        '<p class="note">If you\'ve just pasted the setup line, Ollama is restarting. Give it a moment.</p>');
+      set("c2", "", "Waiting…"); set("c3", "", "Waiting…");
+      return finish(false);
+    }
+    if (reach.state === "blocked") {
+      set("c1", "bad", "<p>Ollama is running, but your browser won't let this page talk to it yet. This is a one-off setup step.</p>" + setupSteps());
+      set("c2", "", "Waiting…"); set("c3", "", "Waiting…");
+      return finish(false);
+    }
+    set("c1", "good", "Yes, Ollama version " + reach.version + ".");
+
+    // 2. Are any models downloaded?
+    const data = await (await fetch(OLLAMA_URL + "/api/tags")).json();
+    const models = (data.models || []).filter(canChat).sort((a, b) => (a.size || 0) - (b.size || 0));
+    if (!models.length) {
+      set("c2", "bad", "<p>No chat models yet. Download one:</p>" + downloadSteps());
+      set("c3", "", "Waiting…");
+      return finish(false);
+    }
+    const list = models.map((m) => "<code>" + m.name + "</code>" + (m.size ? " " + (m.size / 1e9).toFixed(1) + " GB" : "")).join(", ");
+    set("c2", "good", "Yes. You can choose any of these in the bots: " + list);
+
+    // 3. Can it reply? Tried once, with the smallest model.
+    const smallest = models[0].name;
+    if (tested !== smallest) {
+      tested = smallest;
+      set("c3", "wait", "Asking <code>" + smallest + "</code> to say hello. The first reply can take a while as the model loads…");
+      const started = performance.now();
+      try {
+        const res = await fetch(OLLAMA_URL + "/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: smallest, stream: false,
+            messages: [{ role: "user", content: "Say hello in five words or fewer." }] })
+        });
+        const reply = await res.json();
+        if (reply.error) throw new Error(reply.error);
+        const seconds = ((performance.now() - started) / 1000).toFixed(1);
+        const said = (reply.message.content || "").replace(/<think>[\s\S]*?<\/think>/, "").trim().replace(/</g, "&lt;");
+        set("c3", "good", "<code>" + smallest + "</code> said: “" + said + "” (" + seconds + " seconds)" +
+          (seconds > 30 ? '<p class="note">That was slow. It\'s fine to keep going, or pair up with someone whose laptop is quicker.</p>' : ""));
+        return finish(true);
+      } catch (err) {
+        // Not retried automatically. Press Check again to try once more.
+        set("c3", "bad", "<p>The model didn't reply: " + err.message.replace(/</g, "&lt;") + "</p><p>If it mentions memory, close other apps, or pair up with someone. Then press Check again.</p>");
+        return finish(false);
+      }
+    }
+  } catch (err) {
+    set("c1", "bad", "Something unexpected happened: " + String(err.message).replace(/</g, "&lt;") + ". Press Check again.");
+    return finish(false);
+  } finally {
+    running = false;
+  }
+}
+
+function finish(ok) {
+  done = ok;
+  document.getElementById("summary").textContent = ok ? "You're ready." : "Not quite yet. Follow the step above, or ask for help.";
+  document.getElementById("next").hidden = !ok;
+}
+
+// Copy buttons and the Mac / Windows switch.
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  if (button.classList.contains("copy")) {
+    const text = button.previousElementSibling.textContent;
+    try { await navigator.clipboard.writeText(text); }
+    catch (err) {
+      const area = document.createElement("textarea");
+      area.value = text; document.body.appendChild(area); area.select();
+      document.execCommand("copy"); area.remove();
+    }
+    button.textContent = "copied";
+    setTimeout(() => (button.textContent = "copy"), 1500);
+  }
+  if (button.dataset.system) {
+    system = button.dataset.system;
+    lastShown = {};
+    runChecks();
+  }
+});
+
+document.getElementById("again").addEventListener("click", () => { tested = null; lastShown = {}; done = false; runChecks(); });
+
+// Check now, then every few seconds until everything is green.
+runChecks();
+setInterval(() => { if (!done) runChecks(); }, 4000);
+</script>
+</body>
+</html>

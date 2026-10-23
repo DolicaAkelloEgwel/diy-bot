@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DIY Bot: chat</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="chat">
+
+<div class="typo" id="typo" role="alert" hidden></div>
+<script>
+// If the code below has a typo, show a message instead of a blank page.
+window.addEventListener("error", (event) => {
+  if (!/syntax|unexpected|unterminated|missing|invalid|is not defined/i.test(event.message || "")) return;
+  const box = document.getElementById("typo");
+  box.hidden = false;
+  box.textContent =
+    "The bot can't start because of a typo in this file. Most often it's a missing backtick ( ` ) " +
+    "or a missing quote or comma in the YOUR BOT section. Undo your last change, or look near line " +
+    event.lineno + ". Then save and refresh.";
+});
+</script>
+
+<aside>
+  <h1 id="bot-name">Bot</h1>
+
+  <div class="setting">
+    <label for="model-menu">model, running on this laptop</label>
+    <select id="model-menu"><option>looking for models…</option></select>
+  </div>
+
+  <div class="setting">
+    <label for="temperature">temperature <span id="temperature-value"></span></label>
+    <input type="range" id="temperature" min="0" max="1.5" step="0.1">
+  </div>
+
+  <div class="setting">
+    <span class="setting-label">notes it can search</span>
+    <div class="buttons">
+      <button type="button" id="add-files">add files</button>
+      <button type="button" id="add-folder">add a folder</button>
+    </div>
+    <input type="file" id="notes-files" multiple accept=".txt,.md,text/plain,text/markdown" hidden>
+    <input type="file" id="notes-folder" webkitdirectory hidden>
+    <p class="notes-status" id="notes-status" aria-live="polite">none yet</p>
+    <button type="button" id="notes-clear" class="link" hidden>forget notes</button>
+  </div>
+
+  <details>
+    <summary>its instructions</summary>
+    <div class="instructions" id="bot-instructions"></div>
+  </details>
+
+  <div class="buttons end">
+    <button type="button" id="save">save conversation</button>
+    <button type="button" id="restart">start again</button>
+  </div>
+</aside>
+
+<main>
+  <div id="conversation">
+    <div class="column" id="column" role="log" aria-live="polite" aria-relevant="additions">
+      <p class="empty" id="empty">Say something to begin.</p>
+    </div>
+  </div>
+  <form id="form">
+    <div class="pill">
+      <textarea id="input" aria-label="Your message" placeholder="Write a message, then press Enter" autofocus></textarea>
+      <button class="send" id="send" type="submit" aria-label="Send" title="Send">↑</button>
+    </div>
+  </form>
+</main>
+
+<script>
+/* =====================================================================
+   YOUR BOT: this is the only part you need to change.
+   Paste your blueprint into "instructions", save the file,
+   then refresh this page in your browser.
+   ===================================================================== */
+
+const BOT = {
+  name: "Dot",                 // what your bot is called
+  model: "ministral-3:3b",     // the model to start with. You can switch to any installed model from the menu on the page.
+  temperature: 0.7,            // 0 = predictable, 1 = surprising
+  instructions: `You are Dot, a patient companion for creative work.
+Your purpose is to help me think when I am stuck.
+You only ever reply with one short question.
+You never give advice, answers or lists.`
+};
+
+/* ===================================================================== */
+
+
+/* ---------------------------------------------------------------------
+   SHARED CORE: the same in every template.
+   It sends text to the model running on your own laptop
+   and passes back the reply, a few words at a time.
+   Nothing here leaves your computer.
+
+   Two markers in this file:
+   ADAPT  = change this during the workshop.
+   EXTEND = a place to build something new, after the workshop.
+   --------------------------------------------------------------------- */
+
+// EXTEND: where the model runs.
+// Point this at another computer on the same network, so a whole room can share one bot.
+// That computer needs OLLAMA_HOST=0.0.0.0, and your words then travel over the network to it.
+// Other local tools such as LM Studio use a different request format, so askModel would
+// need small changes too. Teaches: where computation happens, and who hosts it.
+const OLLAMA_URL = "http://localhost:11434";   // Ollama, on this laptop
+
+// The model and temperature in use right now. They start as the
+// settings above, and change when you use the menu and slider on the page.
+let currentModel = BOT.model;
+let currentTemperature = BOT.temperature;
+
+// Asks Ollama which models are installed on this laptop, smallest first.
+async function installedModels() {
+  try {
+    const res = await fetch(OLLAMA_URL + "/api/tags");
+    const data = await res.json();
+    return (data.models || [])
+      // Leave out models made for search (embeddings), such as nomic-embed-text: they can't chat.
+      .filter((m) => !/embed|minilm|rerank/i.test(m.name) && !/bert/i.test((m.details && m.details.family) || ""))
+      .map((m) => ({ name: m.name, size: m.size || 0 }))
+      .sort((a, b) => a.size - b.size);
+  } catch (err) {
+    return [];
+  }
+}
+
+// Fills a menu with every installed model, so you can swap between them.
+// EXTEND: know more about each model.
+// Ollama's /api/show gives a model's family, parameter count and context length.
+// Show them in the menu, or warn when a model is too big for this laptop.
+// Teaches: what model size and choice really mean.
+async function setUpModelMenu(menu) {
+  const models = await installedModels();
+  menu.innerHTML = "";
+  if (!models.length) {
+    menu.appendChild(new Option("no models found: open check.html", ""));
+    menu.disabled = true;
+    return;
+  }
+  const full = (n) => (n.includes(":") ? n : n + ":latest");
+  const start = models.find((m) => full(m.name) === full(BOT.model)) || models[0];
+  for (const m of models) {
+    const label = m.name + (m.size ? "  (" + (m.size / 1e9).toFixed(1) + " GB)" : "");
+    menu.appendChild(new Option(label, m.name, false, m.name === start.name));
+  }
+  currentModel = start.name;
+  menu.addEventListener("change", () => { currentModel = menu.value; });
+}
+
+// Connects a slider to the temperature, and shows its value beside it.
+function setUpTemperatureSlider(slider, valueLabel) {
+  slider.value = BOT.temperature;
+  const update = () => {
+    currentTemperature = Number(slider.value);
+    valueLabel.textContent = currentTemperature.toFixed(1);
+  };
+  slider.addEventListener("input", update);
+  update();
+}
+
+// Some models write out reasoning text between <think> and </think>
+// before their answer. This separates the two, so the answer stays clear.
+// EXTEND: other kinds of output.
+// The same idea can pull out other structured parts of a reply, such as JSON, a list
+// or a single chosen word, so another tool can use them.
+// Teaches: bots as parts of larger systems.
+function splitThinking(raw) {
+  const open = raw.indexOf("<think>");
+  if (open === -1) return { thinking: "", answer: raw };
+  const close = raw.indexOf("</think>", open);
+  if (close === -1) return { thinking: raw.slice(open + 7), answer: raw.slice(0, open) };
+  return {
+    thinking: raw.slice(open + 7, close).trim(),
+    answer: (raw.slice(0, open) + raw.slice(close + 8)).trim()
+  };
+}
+
+// Sends messages to the model and calls onUpdate as the reply arrives,
+// with { thinking, answer } so far. Returns the finished { thinking, answer }.
+async function askModel(messages, onUpdate) {
+  let response;
+  try {
+    response = await fetch(OLLAMA_URL + "/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // EXTEND: more settings than temperature.
+      // Inside options: num_ctx (how much text it can take in), seed (the same reply every
+      // time), stop (words that end the reply), top_p. Beside options: format: "json" for
+      // structured replies another program can use. Teaches: what shapes a reply beyond the prompt.
+      body: JSON.stringify({
+        model: currentModel,
+        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        stream: true,
+        options: { temperature: currentTemperature }
+      })
+    });
+  } catch (err) {
+    throw new Error("Couldn't reach Ollama. Is the Ollama app open? Open check.html to find out what's wrong.");
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    if (response.status === 404) {
+      throw new Error(`The model "${currentModel}" isn't installed. In a terminal, run:  ollama pull ${currentModel}`);
+    }
+    throw new Error("Ollama replied with an error: " + text);
+  }
+
+  // The reply arrives in small pieces, one line of data per piece.
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let waiting = "";
+  let raw = "";        // the reply text as it arrives
+  let thinking = "";   // reasoning text, if Ollama sends it separately
+  let parts = { thinking: "", answer: "" };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    waiting += decoder.decode(value, { stream: true });
+    const lines = waiting.split("\n");
+    waiting = lines.pop();
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const piece = JSON.parse(line);
+      if (piece.error) throw new Error(piece.error);
+      // EXTEND: count the tokens.
+      // The last piece (piece.done === true) includes prompt_eval_count (tokens read),
+      // eval_count (tokens written) and eval_duration (nanoseconds). Show them, or how full
+      // the context window is. Teaches: tokens and context windows, made visible.
+      if (!piece.message) continue;
+      if (piece.message.thinking) thinking += piece.message.thinking;
+      if (piece.message.content) raw += piece.message.content;
+      const split = splitThinking(raw);
+      parts = { thinking: (thinking + split.thinking).trim(), answer: split.answer };
+      onUpdate(parts);
+    }
+  }
+  return parts;
+}
+
+// Saves text as a file in your Downloads folder. It's made here on the laptop.
+// EXTEND: memory that lasts.
+// Save as Markdown or JSON, save automatically, or add a button that loads a saved
+// conversation back in, so the bot can carry on where it left off. For a step-by-step
+// path to a bot that remembers you, see "Give it a memory" in the guide.
+// Teaches: what memory and persistence are, and where they live.
+function saveTextFile(filename, text) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+// Copies text, so you can paste it somewhere else.
+async function copyText(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+  const before = button.textContent;
+  button.textContent = "copied";
+  setTimeout(() => (button.textContent = before), 1500);
+}
+
+// A file name made from the bot's name and today's date.
+function fileName(kind) {
+  const day = new Date().toISOString().slice(0, 10);
+  return BOT.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + kind + "-" + day + ".txt";
+}
+
+/* --------------------------------------------------------------------- */
+
+
+
+/* ---------------------------------------------------------------------
+   THIS TEMPLATE: a conversation.
+   Each turn shows: your message, the prompt sent to the model,
+   the bot's reply, and small labels saying how it was made.
+   ADAPT: this is the part to change if you want a different way
+   of talking to your bot.
+   --------------------------------------------------------------------- */
+
+const scroller = document.getElementById("conversation");
+const column = document.getElementById("column");
+const form = document.getElementById("form");
+const input = document.getElementById("input");
+const sendButton = document.getElementById("send");
+
+document.getElementById("bot-name").textContent = BOT.name;
+setUpModelMenu(document.getElementById("model-menu"));
+setUpTemperatureSlider(document.getElementById("temperature"), document.getElementById("temperature-value"));
+document.getElementById("bot-instructions").textContent = BOT.instructions;
+document.title = BOT.name;
+
+// The conversation so far. It starts with your instructions.
+// EXTEND: how the bot remembers.
+// Everything in history is sent with every message, and it forgets when the page closes.
+// Try keeping only the last few turns, summarising older ones, or saving it between visits.
+// Teaches: how chatbot "memory" really works.
+let history = [{ role: "system", content: BOT.instructions }];
+
+// A record of each turn, for "save conversation".
+let record = [];
+
+function make(tag, className, text) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+
+/* ---------------------------------------------------------------------
+   NOTES IT CAN SEARCH: a simple version of retrieval.
+   COLLECT: you choose text files. They're read here, never uploaded.
+   FIND: for each message, the passages sharing the most words with it
+   are added to the prompt. It matches words, not meanings: ask about
+   "plants" and it won't find a note that only says "fig tree".
+   ADAPT: change HOW_MANY, or how passages are split and scored.
+   --------------------------------------------------------------------- */
+
+const HOW_MANY = 3;   // passages added to each message
+let notes = [];       // { source, text, words }
+
+// Common words that don't help with finding things.
+const IGNORE = new Set(("the and but for with this that these those you your yours our are was were been " +
+  "have has had not can could would should will just about into over also very what which who when where " +
+  "why how than then there here from they them their its it's i'm i've don't").split(" "));
+
+// EXTEND: better word matching.
+// Match word endings (garden, gardens, gardening) or add more words to IGNORE.
+function wordsIn(text) {
+  return (text.toLowerCase().match(/[\p{L}\p{N}']+/gu) || []).filter((w) => w.length > 2 && !IGNORE.has(w));
+}
+
+async function addNotes(files) {
+  for (const file of files) {
+    if (!/\.(txt|md)$/i.test(file.name)) continue;
+    const text = await file.text();
+    // EXTEND: how notes are prepared.
+    // Try bigger or smaller passages, or keep each heading with the text under it.
+    // Teaches: why retrieval depends on how material is prepared.
+    // Split into passages at blank lines.
+    for (const passage of text.split(/\n\s*\n/)) {
+      const clean = passage.trim();
+      if (clean.length < 20) continue;
+      notes.push({ source: file.webkitRelativePath || file.name, text: clean.slice(0, 1200), words: new Set(wordsIn(clean)) });
+    }
+  }
+  showNotesStatus();
+}
+
+function showNotesStatus() {
+  const sources = new Set(notes.map((n) => n.source)).size;
+  document.getElementById("notes-status").textContent =
+    notes.length ? sources + (sources === 1 ? " file, " : " files, ") + notes.length + " passages" : "none yet";
+  document.getElementById("notes-clear").hidden = !notes.length;
+}
+
+// EXTEND: find by meaning, not just words.
+// First, give rare words more weight than common ones. Then try embeddings: Ollama's
+// /api/embed with a model like nomic-embed-text turns each passage into numbers, so
+// "plants" can find "fig tree". Teaches: the path from keyword search to retrieval.
+function findInNotes(question) {
+  const asked = new Set(wordsIn(question));
+  return notes
+    .map((n) => ({ ...n, score: [...asked].filter((w) => n.words.has(w)).length }))
+    .filter((n) => n.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, HOW_MANY);
+}
+
+document.getElementById("add-files").addEventListener("click", () => document.getElementById("notes-files").click());
+document.getElementById("add-folder").addEventListener("click", () => document.getElementById("notes-folder").click());
+document.getElementById("notes-files").addEventListener("change", (e) => addNotes(e.target.files));
+document.getElementById("notes-folder").addEventListener("change", (e) => addNotes(e.target.files));
+document.getElementById("notes-clear").addEventListener("click", () => { notes = []; showNotesStatus(); });
+
+/* --------------------------------------------------------------------- */
+
+
+// The block showing exactly what the model received.
+// EXTEND: show what's usually hidden.
+// Add the token count for each part, and how full the context window is.
+// Teaches: making the parts of a prompt legible.
+function promptBlock(messages, searchedNotes) {
+  const block = make("details", "prompt");
+  block.open = true;
+  const summary = make("summary", "", "prompt sent to model");
+  summary.title = "Everything the model received this turn: your bot's instructions, anything found in your notes, then the conversation so far. Nothing else is hidden.";
+  block.appendChild(summary);
+  for (const m of messages) {
+    const part = make("div", m.fromNotes ? "part notes" : "part");
+    const who = m.fromNotes ? "found in your notes" : m.role === "system" ? "instructions" : m.role === "user" ? "you" : BOT.name;
+    part.appendChild(make("span", "role", who));
+    part.appendChild(document.createTextNode(m.content));
+    block.appendChild(part);
+  }
+  if (searchedNotes && !messages.some((m) => m.fromNotes)) {
+    const part = make("div", "part notes");
+    part.appendChild(make("span", "role", "found in your notes"));
+    part.appendChild(document.createTextNode("nothing matched the words in this message"));
+    block.appendChild(part);
+  }
+  return block;
+}
+
+// Small labels under each reply, with a plain explanation on hover, and a copy button.
+// EXTEND: the cost of a reply.
+// Add tokens per second (eval_count over eval_duration), or a rough energy estimate.
+// Any energy figure is an estimate, so say so on the page.
+// Teaches: that every reply has a material cost.
+function chips(seconds, model, temperature, answer) {
+  const row = make("div", "chips");
+  const list = [
+    [model, "The model that wrote this reply. It's a file on this laptop. Switch models from the menu in the sidebar."],
+    ["on this laptop", "The reply was made here. Nothing was sent over the internet."],
+    ["temperature " + temperature.toFixed(1), "How predictable the model is. Lower is steadier, higher is more surprising."],
+    [seconds + "s", "How long this reply took on this laptop."]
+  ];
+  for (const [label, explanation] of list) {
+    const chip = make("span", "chip", label);
+    chip.title = explanation;
+    row.appendChild(chip);
+  }
+  const copy = make("button", "chip copy", "copy");
+  copy.type = "button";
+  copy.title = "Copy this reply";
+  copy.addEventListener("click", () => copyText(answer, copy));
+  row.appendChild(copy);
+  return row;
+}
+
+function scrollDown() { scroller.scrollTop = scroller.scrollHeight; }
+
+// EXTEND: other ways in.
+// Preset buttons instead of typing; images for models that can see (a message can
+// carry an images list, and askModel would need to pass it on); or voice. For voice,
+// the browser's built-in speech recognition usually sends audio away; a local model
+// such as Whisper keeps it on the laptop. Teaches: the interface is a design choice.
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = "";
+  sendButton.disabled = true;
+  document.getElementById("empty")?.remove();
+
+  // Earlier prompt blocks shrink to a dashed pill.
+  column.querySelectorAll("details.prompt").forEach((d) => (d.open = false));
+
+  history.push({ role: "user", content: text });
+
+  // What gets sent: the conversation so far, plus anything found in your notes,
+  // placed just before your latest message.
+  const found = findInNotes(text);
+  const toSend = history.slice();
+  if (found.length) {
+    toSend.splice(toSend.length - 1, 0, {
+      role: "system",
+      fromNotes: true,
+      content: "Passages from my notes that may be relevant. Use them if they help, and say which note you used.\n\n" +
+        found.map((n, i) => "[" + (i + 1) + "] from " + n.source + ":\n" + n.text).join("\n\n")
+    });
+  }
+
+  const turn = make("div", "turn");
+  turn.appendChild(make("div", "you", text));
+  turn.appendChild(promptBlock(toSend, notes.length > 0));
+  const reply = make("div", "bot", "…");
+  reply.setAttribute("aria-busy", "true");
+  turn.appendChild(reply);
+  column.appendChild(turn);
+  scrollDown();
+
+  const modelUsed = currentModel;
+  const temperatureUsed = currentTemperature;
+  const started = performance.now();
+  let reasoning = null;
+
+  try {
+    const result = await askModel(toSend, ({ thinking, answer }) => {
+      // Reasoning text, if the model writes any, goes in its own small panel.
+      if (thinking && !reasoning) {
+        reasoning = make("details", "thinking");
+        reasoning.appendChild(make("summary", "", "the model's reasoning text"));
+        reasoning.appendChild(make("div", "thinking-text"));
+        turn.insertBefore(reasoning, reply);
+      }
+      if (reasoning) reasoning.querySelector(".thinking-text").textContent = thinking;
+      // EXTEND: other ways out.
+      // Show replies as cards, margin notes or one line at a time, or read them aloud.
+      // Some browser voices are processed on a server, so check before relying on it.
+      reply.textContent = answer || "…";
+      scrollDown();
+    });
+    history.push({ role: "assistant", content: result.answer });
+    record.push({ you: text, answer: result.answer, thinking: result.thinking, model: modelUsed,
+                  temperature: temperatureUsed, notes: found.map((n) => n.source) });
+    turn.appendChild(chips(((performance.now() - started) / 1000).toFixed(1), modelUsed, temperatureUsed, result.answer));
+  } catch (err) {
+    reply.className = "bot error";
+    reply.textContent = err.message;
+    history.pop(); // forget the message that didn't get a reply
+  }
+
+  reply.setAttribute("aria-busy", "false");
+  scrollDown();
+  sendButton.disabled = false;
+  input.focus();
+});
+
+// Enter sends. Shift + Enter makes a new line.
+input.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    form.requestSubmit();
+  }
+});
+
+// EXTEND: more than one bot.
+// Give a second BOT its own instructions and let the two reply to each other in turn.
+// Worth doing critically: what happens when no person is in the loop?
+//
+// EXTEND, beyond this page: some things need a small script outside the browser,
+// such as running at a set time, watching a folder, keeping notes between visits,
+// or posting somewhere. The page is the start; the script is the next step.
+// Saves the whole conversation as a text file.
+document.getElementById("save").addEventListener("click", () => {
+  let text = BOT.name + "\nsaved " + new Date().toLocaleString() + "\n\ninstructions:\n" + BOT.instructions + "\n";
+  for (const t of record) {
+    text += "\n----\n\nyou: " + t.you + "\n";
+    if (t.notes.length) text += "(found in notes: " + t.notes.join(", ") + ")\n";
+    if (t.thinking) text += "\n(reasoning text)\n" + t.thinking + "\n";
+    text += "\n" + BOT.name + " (" + t.model + ", temperature " + t.temperature.toFixed(1) + "): " + t.answer + "\n";
+  }
+  saveTextFile(fileName("conversation"), text);
+});
+
+document.getElementById("restart").addEventListener("click", () => {
+  history = [{ role: "system", content: BOT.instructions }];
+  record = [];
+  column.innerHTML = '<p class="empty" id="empty">Say something to begin.</p>';
+  input.focus();
+});
+</script>
+<!-- VOICE: the microphone button. Delete this line to remove it. -->
+<script src="voice.js"></script>
+</body>
+</html>

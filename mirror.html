@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DIY Bot: mirror</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="mirror">
+
+<div class="typo" id="typo" role="alert" hidden></div>
+<script>
+// If the code below has a typo, show a message instead of a blank page.
+window.addEventListener("error", (event) => {
+  if (!/syntax|unexpected|unterminated|missing|invalid|is not defined/i.test(event.message || "")) return;
+  const box = document.getElementById("typo");
+  box.hidden = false;
+  box.textContent =
+    "The bot can't start because of a typo in this file. Most often it's a missing backtick ( ` ) " +
+    "or a missing quote or comma in the YOUR BOT section. Undo your last change, or look near line " +
+    event.lineno + ". Then save and refresh.";
+});
+</script>
+
+<div class="page">
+
+  <header>
+    <h1 id="bot-name">Mirror</h1>
+    <p>It doesn't chat. Give it some of your writing and it reflects it back.</p>
+    <div class="controls">
+      <span class="pair">
+        <label for="model-menu">model, running on this laptop</label>
+        <select id="model-menu"><option>looking for models…</option></select>
+      </span>
+      <span class="pair">
+        <label for="temperature">temperature <span id="temperature-value"></span></label>
+        <input type="range" id="temperature" min="0" max="1.5" step="0.1">
+      </span>
+    </div>
+  </header>
+
+  <section class="writing">
+    <label for="writing">Your writing</label>
+    <textarea id="writing" placeholder="Paste in some notes, a journal entry, a draft..."></textarea>
+    <div class="row">
+      <span class="file"><label for="file">or open a text file:</label> <input type="file" id="file" accept=".txt,.md,text/plain,text/markdown"></span>
+      <button id="reflect" type="button">Reflect</button>
+    </div>
+  </section>
+
+  <div class="reflections-head">
+    <h2>Reflections</h2>
+    <button type="button" id="save" class="quiet">save reflections</button>
+  </div>
+  <div id="reflections" aria-live="polite">
+    <p class="empty" id="empty">Nothing yet. Reflections appear here, newest first.</p>
+  </div>
+
+</div>
+
+<script>
+/* =====================================================================
+   YOUR BOT: this is the only part you need to change.
+   Paste your blueprint into "instructions", save the file,
+   then refresh this page in your browser.
+   ===================================================================== */
+
+const BOT = {
+  name: "Mirror",              // what your bot is called
+  model: "ministral-3:3b",     // the model to start with. You can switch to any installed model from the menu on the page.
+  temperature: 0.6,            // 0 = predictable, 1 = surprising
+  instructions: `You are Mirror. You do not chat and you do not give advice.
+You will be given a piece of someone's own writing.
+Reflect it back to them: name two or three ideas or words that keep returning,
+and one connection they might not have noticed.
+End with a single question the writing seems to be asking.
+Never rewrite, correct, praise or judge the writing.
+Keep it under 150 words.`
+};
+
+/* ===================================================================== */
+
+
+/* ---------------------------------------------------------------------
+   SHARED CORE: the same in every template.
+   It sends text to the model running on your own laptop
+   and passes back the reply, a few words at a time.
+   Nothing here leaves your computer.
+
+   Two markers in this file:
+   ADAPT  = change this during the workshop.
+   EXTEND = a place to build something new, after the workshop.
+   --------------------------------------------------------------------- */
+
+// EXTEND: where the model runs.
+// Point this at another computer on the same network, so a whole room can share one bot.
+// That computer needs OLLAMA_HOST=0.0.0.0, and your words then travel over the network to it.
+// Other local tools such as LM Studio use a different request format, so askModel would
+// need small changes too. Teaches: where computation happens, and who hosts it.
+const OLLAMA_URL = "http://localhost:11434";   // Ollama, on this laptop
+
+// The model and temperature in use right now. They start as the
+// settings above, and change when you use the menu and slider on the page.
+let currentModel = BOT.model;
+let currentTemperature = BOT.temperature;
+
+// Asks Ollama which models are installed on this laptop, smallest first.
+async function installedModels() {
+  try {
+    const res = await fetch(OLLAMA_URL + "/api/tags");
+    const data = await res.json();
+    return (data.models || [])
+      // Leave out models made for search (embeddings), such as nomic-embed-text: they can't chat.
+      .filter((m) => !/embed|minilm|rerank/i.test(m.name) && !/bert/i.test((m.details && m.details.family) || ""))
+      .map((m) => ({ name: m.name, size: m.size || 0 }))
+      .sort((a, b) => a.size - b.size);
+  } catch (err) {
+    return [];
+  }
+}
+
+// Fills a menu with every installed model, so you can swap between them.
+// EXTEND: know more about each model.
+// Ollama's /api/show gives a model's family, parameter count and context length.
+// Show them in the menu, or warn when a model is too big for this laptop.
+// Teaches: what model size and choice really mean.
+async function setUpModelMenu(menu) {
+  const models = await installedModels();
+  menu.innerHTML = "";
+  if (!models.length) {
+    menu.appendChild(new Option("no models found: open check.html", ""));
+    menu.disabled = true;
+    return;
+  }
+  const full = (n) => (n.includes(":") ? n : n + ":latest");
+  const start = models.find((m) => full(m.name) === full(BOT.model)) || models[0];
+  for (const m of models) {
+    const label = m.name + (m.size ? "  (" + (m.size / 1e9).toFixed(1) + " GB)" : "");
+    menu.appendChild(new Option(label, m.name, false, m.name === start.name));
+  }
+  currentModel = start.name;
+  menu.addEventListener("change", () => { currentModel = menu.value; });
+}
+
+// Connects a slider to the temperature, and shows its value beside it.
+function setUpTemperatureSlider(slider, valueLabel) {
+  slider.value = BOT.temperature;
+  const update = () => {
+    currentTemperature = Number(slider.value);
+    valueLabel.textContent = currentTemperature.toFixed(1);
+  };
+  slider.addEventListener("input", update);
+  update();
+}
+
+// Some models write out reasoning text between <think> and </think>
+// before their answer. This separates the two, so the answer stays clear.
+// EXTEND: other kinds of output.
+// The same idea can pull out other structured parts of a reply, such as JSON, a list
+// or a single chosen word, so another tool can use them.
+// Teaches: bots as parts of larger systems.
+function splitThinking(raw) {
+  const open = raw.indexOf("<think>");
+  if (open === -1) return { thinking: "", answer: raw };
+  const close = raw.indexOf("</think>", open);
+  if (close === -1) return { thinking: raw.slice(open + 7), answer: raw.slice(0, open) };
+  return {
+    thinking: raw.slice(open + 7, close).trim(),
+    answer: (raw.slice(0, open) + raw.slice(close + 8)).trim()
+  };
+}
+
+// Sends messages to the model and calls onUpdate as the reply arrives,
+// with { thinking, answer } so far. Returns the finished { thinking, answer }.
+async function askModel(messages, onUpdate) {
+  let response;
+  try {
+    response = await fetch(OLLAMA_URL + "/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // EXTEND: more settings than temperature.
+      // Inside options: num_ctx (how much text it can take in), seed (the same reply every
+      // time), stop (words that end the reply), top_p. Beside options: format: "json" for
+      // structured replies another program can use. Teaches: what shapes a reply beyond the prompt.
+      body: JSON.stringify({
+        model: currentModel,
+        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        stream: true,
+        options: { temperature: currentTemperature }
+      })
+    });
+  } catch (err) {
+    throw new Error("Couldn't reach Ollama. Is the Ollama app open? Open check.html to find out what's wrong.");
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    if (response.status === 404) {
+      throw new Error(`The model "${currentModel}" isn't installed. In a terminal, run:  ollama pull ${currentModel}`);
+    }
+    throw new Error("Ollama replied with an error: " + text);
+  }
+
+  // The reply arrives in small pieces, one line of data per piece.
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let waiting = "";
+  let raw = "";        // the reply text as it arrives
+  let thinking = "";   // reasoning text, if Ollama sends it separately
+  let parts = { thinking: "", answer: "" };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    waiting += decoder.decode(value, { stream: true });
+    const lines = waiting.split("\n");
+    waiting = lines.pop();
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const piece = JSON.parse(line);
+      if (piece.error) throw new Error(piece.error);
+      // EXTEND: count the tokens.
+      // The last piece (piece.done === true) includes prompt_eval_count (tokens read),
+      // eval_count (tokens written) and eval_duration (nanoseconds). Show them, or how full
+      // the context window is. Teaches: tokens and context windows, made visible.
+      if (!piece.message) continue;
+      if (piece.message.thinking) thinking += piece.message.thinking;
+      if (piece.message.content) raw += piece.message.content;
+      const split = splitThinking(raw);
+      parts = { thinking: (thinking + split.thinking).trim(), answer: split.answer };
+      onUpdate(parts);
+    }
+  }
+  return parts;
+}
+
+// Saves text as a file in your Downloads folder. It's made here on the laptop.
+// EXTEND: memory that lasts.
+// Save as Markdown or JSON, save automatically, or add a button that loads a saved
+// conversation back in, so the bot can carry on where it left off. For a step-by-step
+// path to a bot that remembers you, see "Give it a memory" in the guide.
+// Teaches: what memory and persistence are, and where they live.
+function saveTextFile(filename, text) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+// Copies text, so you can paste it somewhere else.
+async function copyText(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+  const before = button.textContent;
+  button.textContent = "copied";
+  setTimeout(() => (button.textContent = before), 1500);
+}
+
+// A file name made from the bot's name and today's date.
+function fileName(kind) {
+  const day = new Date().toISOString().slice(0, 10);
+  return BOT.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + kind + "-" + day + ".txt";
+}
+
+/* --------------------------------------------------------------------- */
+
+
+
+/* ---------------------------------------------------------------------
+   THIS TEMPLATE: one reflection at a time, no conversation.
+   Each reflection starts fresh: the bot doesn't remember earlier ones.
+   ADAPT: this is the part to change if you want a different way
+   of giving your bot material, or a different way of showing what it says.
+   --------------------------------------------------------------------- */
+
+const writingEl = document.getElementById("writing");
+const reflectButton = document.getElementById("reflect");
+const reflectionsEl = document.getElementById("reflections");
+
+document.getElementById("bot-name").textContent = BOT.name;
+setUpModelMenu(document.getElementById("model-menu"));
+setUpTemperatureSlider(document.getElementById("temperature"), document.getElementById("temperature-value"));
+document.title = BOT.name;
+
+// EXTEND: reflections over time.
+// Keep reflections between visits and compare them, weekly for example, so the bot
+// notices what changes. Teaches: bots that work with time, not just turns.
+// A record of each reflection, for "save reflections".
+const record = [];
+
+function make(tag, className, text) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+// Shows exactly what was sent to the model, so the instructions stay visible.
+function showWhatWasSent(messages, container) {
+  const panel = make("details", "sent");
+  panel.appendChild(make("summary", "", "prompt sent to model"));
+  for (const m of messages) {
+    const part = make("div", "part");
+    part.appendChild(make("span", "role", m.role === "system" ? "instructions" : "you"));
+    part.appendChild(document.createTextNode(m.content));
+    panel.appendChild(part);
+  }
+  container.appendChild(panel);
+}
+
+// EXTEND: what it's given.
+// Accept several files at once, or two pieces of writing to compare.
+// Teaches: what a bot is given shapes what it can notice.
+// Opening a file reads it here in the browser. It isn't uploaded anywhere.
+document.getElementById("file").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (file) writingEl.value = await file.text();
+});
+
+reflectButton.addEventListener("click", async () => {
+  const writing = writingEl.value.trim();
+  if (!writing) { writingEl.focus(); return; }
+
+  reflectButton.disabled = true;
+  document.getElementById("empty")?.remove();
+
+  const modelUsed = currentModel;
+  const temperatureUsed = currentTemperature;
+
+  // Build the card for this reflection, newest at the top.
+  const card = make("article", "reflection");
+  card.setAttribute("aria-busy", "true");
+  const when = new Date().toLocaleString();
+  const time = make("time", "", when + ", " + modelUsed + ", temperature " + temperatureUsed.toFixed(1));
+  const text = make("div", "text", "…");
+  card.append(time, text);
+  reflectionsEl.prepend(card);
+
+  // EXTEND: continuity.
+  // Add earlier reflections here, so each new one can build on the last.
+  const messages = [
+    { role: "system", content: BOT.instructions },
+    { role: "user", content: "Here is my writing:\n\n" + writing }
+  ];
+
+  let reasoning = null;
+  try {
+    const result = await askModel(messages, ({ thinking, answer }) => {
+      // Reasoning text, if the model writes any, goes in its own small panel.
+      if (thinking && !reasoning) {
+        reasoning = make("details", "thinking");
+        reasoning.appendChild(make("summary", "", "the model's reasoning text"));
+        reasoning.appendChild(make("div", "thinking-text"));
+        card.insertBefore(reasoning, text);
+      }
+      if (reasoning) reasoning.querySelector(".thinking-text").textContent = thinking;
+      // EXTEND: other forms of reflection.
+      // One sentence, a single question, a card, or read aloud (check where the voice is processed).
+      text.textContent = answer || "…";
+    });
+    record.push({ when, model: modelUsed, temperature: temperatureUsed, writing, answer: result.answer });
+    const copy = make("button", "copy", "copy");
+    copy.type = "button";
+    copy.title = "Copy this reflection";
+    copy.addEventListener("click", () => copyText(result.answer, copy));
+    card.appendChild(copy);
+  } catch (err) {
+    card.classList.add("error");
+    text.textContent = err.message;
+  }
+  showWhatWasSent(messages, card);
+  card.setAttribute("aria-busy", "false");
+
+  reflectButton.disabled = false;
+});
+
+// EXTEND, beyond this page: to reflect on writing automatically, for example every
+// evening, use a small script outside the browser and a scheduler.
+// Saves every reflection, with the writing it reflected on, as a text file.
+document.getElementById("save").addEventListener("click", () => {
+  let out = BOT.name + "\nsaved " + new Date().toLocaleString() + "\n\ninstructions:\n" + BOT.instructions + "\n";
+  for (const r of record) {
+    out += "\n----\n\n" + r.when + ", " + r.model + ", temperature " + r.temperature.toFixed(1) +
+           "\n\nwriting:\n" + r.writing + "\n\nreflection:\n" + r.answer + "\n";
+  }
+  saveTextFile(fileName("reflections"), out);
+});
+</script>
+</body>
+</html>

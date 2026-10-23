@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DIY Bot: guide</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="guide">
+<div class="page">
+
+<header>
+  <h1>DIY Bot: guide</h1>
+  <nav aria-label="Pages in this folder">
+    <a href="check.html">check</a>
+    <a href="chat.html">chat</a>
+    <a href="mirror.html">mirror</a>
+  </nav>
+</header>
+
+<main>
+<p>Two small bots that run entirely on your own laptop. Nothing you type is sent anywhere.</p>
+<table>
+<thead>
+<tr>
+  <th>File</th>
+  <th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>check.html</code></td>
+  <td>Gets everything ready, step by step. Open this first.</td>
+</tr>
+<tr>
+  <td><code>chat.html</code></td>
+  <td>A bot you talk to, one message at a time.</td>
+</tr>
+<tr>
+  <td><code>mirror.html</code></td>
+  <td>A bot that doesn't chat. Give it some of your writing and it reflects it back.</td>
+</tr>
+<tr>
+  <td><code>voice.js</code></td>
+  <td>Adds a microphone button to the chat bot. Speech is turned into text on your laptop.</td>
+</tr>
+<tr>
+  <td><code>style.css</code></td>
+  <td>How every page looks: fonts, colours and layout.</td>
+</tr>
+<tr>
+  <td><code>Modelfile.txt</code></td>
+  <td>The simplest possible bot: a text file and a model, no browser needed.</td>
+</tr>
+<tr>
+  <td><code>guide.html</code></td>
+  <td>This guide, as a page. Open it in your browser.</td>
+</tr>
+<tr>
+  <td><code>README.md</code></td>
+  <td>The same guide, as plain text.</td>
+</tr>
+</tbody>
+</table>
+<p>Both bots use the same core. What makes them different is how you give them material and how they show what they say.</p>
+<p>Each bot's <code>.html</code> file is what it does. <code>style.css</code> is how they all look.</p>
+<h2>1. Getting ready</h2>
+<ol>
+<li><strong>Install Ollama</strong> from <a href="https://ollama.com">ollama.com</a>, and open it. It's free, open source software that runs language models on your laptop.</li>
+<li><strong>Double-click <code>check.html</code></strong> to open it in your browser, and follow the step it shows you. It checks again by itself every few seconds.</li>
+</ol>
+<p>The first time, it will usually ask you to paste one line into Terminal (Mac) or PowerShell (Windows). That line lets the bot pages talk to Ollama, and downloads a model of about 2 to 3GB. After that, everything works without the internet.</p>
+<p>When you see three green lights, you're ready.</p>
+<h3>More details: what the setup line does</h3>
+<p>Your browser normally stops pages opened from your own files from talking to programs on your laptop. The setup line sets <code>OLLAMA_ORIGINS</code> to <code>*</code>, which tells Ollama to accept them.</p>
+<p>While it's set, any website open in your browser could also send requests to Ollama: use your models, or download or delete them. It can't reach your files. To undo it:</p>
+<ul>
+<li><strong>Mac</strong> (it also resets when you restart): <code>launchctl unsetenv OLLAMA_ORIGINS</code>, then quit and reopen Ollama.</li>
+<li><strong>Windows:</strong> <code>[Environment]::SetEnvironmentVariable(&quot;OLLAMA_ORIGINS&quot;, $null, &quot;User&quot;)</code>, then quit and reopen Ollama.</li>
+</ul>
+<p>If you'd rather not change the setting and you have Python, open the pages through a small local server instead. In this folder, run:</p>
+<pre><code>python3 -m http.server 8000
+</code></pre>
+<p>Then open <a href="http://localhost:8000/check.html">localhost:8000/check.html</a>. Ollama already trusts pages opened that way.</p>
+<h2>2. Make your bot</h2>
+<ol>
+<li><p>Open <code>chat.html</code> or <code>mirror.html</code> in a <strong>text editor</strong>, not a browser.</p>
+<ul>
+<li>Windows: right-click the file, choose <em>Open with</em>, then <em>Notepad</em>.</li>
+<li>Mac: TextEdit shows HTML as a formatted page by default. In TextEdit, go to <em>Settings</em>, then <em>Open and Save</em>, and tick <em>Display HTML files as HTML code</em>. Or use a free code editor such as <a href="https://code.visualstudio.com">VS Code</a>.</li>
+</ul>
+</li>
+<li><p>Near the top of the code, find the section marked <strong>YOUR BOT</strong>. It looks like this:</p>
+<pre><code class="language-js">const BOT = {
+  name: &quot;Dot&quot;,
+  model: &quot;ministral-3:3b&quot;,
+  temperature: 0.7,
+  instructions: `You are Dot, ...`
+};
+</code></pre>
+</li>
+<li><p>Replace the instructions with your blueprint: its name and personality, its purpose, what it knows, how it should respond, and what it should never do. Keep the backticks ( ` ) at the start and end.</p>
+</li>
+<li><p>Save the file, then refresh the page in your browser.</p>
+</li>
+</ol>
+<p>That's it. Every time you change the instructions, save and refresh.</p>
+<h3>Writing instructions that work</h3>
+<p>Small models follow short, plain instructions better than long or clever ones. A few habits help:</p>
+<ul>
+<li><strong>Start with one line saying who it is and what it's for.</strong> &quot;You are Fern, a bot that helps me notice what I already know about my project.&quot;</li>
+<li><strong>Put the most important rule first.</strong> Rules near the top tend to be followed more closely.</li>
+<li><strong>Say what to do, not only what not to do.</strong> &quot;Don't be long-winded&quot; is vague. &quot;Reply in two sentences, then ask one question&quot; is something it can follow.</li>
+<li><strong>Set the shape of a reply:</strong> how long, what tone, whether it asks questions, whether it uses lists.</li>
+<li><strong>If the behaviour is unusual, show one example.</strong> Write a short made-up exchange: what you might say, and how it should answer.</li>
+</ul>
+<p>Then test it, open &quot;prompt sent to model&quot;, and change one thing at a time. Writing instructions is mostly rewriting them.</p>
+<h3>Choosing a model</h3>
+<p>Each template has a <strong>model</strong> menu listing every model installed on your laptop, with its size. Pick one and your next message uses it. Your instructions stay the same, so you can see how differently each model behaves with the same bot. The <code>model</code> in the settings is just the one it starts with.</p>
+<h3>Temperature</h3>
+<p>Next to the model menu there's a <strong>temperature</strong> slider. Lower makes replies steadier and more predictable; higher makes them more surprising, and eventually strange. Try the same message at 0.2 and at 1.2. The <code>temperature</code> in the settings is just where the slider starts.</p>
+<h3>&quot;prompt sent to model&quot;</h3>
+<p>Under each message there's a small panel called <strong>prompt sent to model</strong>. Open it to see exactly what the model received: your instructions, anything found in your notes, then the conversation so far. Nothing else is hidden. Your bot is those instructions plus the model.</p>
+<h3>Notes it can search (chat)</h3>
+<p>In the chat sidebar, <strong>add files</strong> or <strong>add a folder</strong> of <code>.txt</code> or <code>.md</code> files. They're read in your browser, never uploaded. For each message, the page finds the passages that share the most words with what you wrote, and adds up to three of them to the prompt. Open &quot;prompt sent to model&quot; to see what was found.</p>
+<p>This is a simple version of what's called retrieval: <strong>collect</strong> (you choose the files), <strong>find</strong> (matching words), then <strong>predict</strong> (the model writes a reply). It matches words, not meanings: ask about &quot;plants&quot; and it won't find a note that only says &quot;fig tree&quot;. The notes are forgotten when you close the page.</p>
+<h3>Saving and copying</h3>
+<ul>
+<li><strong>copy</strong> under a reply puts it on your clipboard, ready to paste somewhere else.</li>
+<li><strong>save conversation</strong> (chat) or <strong>save reflections</strong> (mirror) downloads a text file with everything, including the instructions, models and temperatures used. It's made on your laptop.</li>
+</ul>
+<h3>Reasoning text</h3>
+<p>Some models, such as DeepSeek R1, write out a kind of reasoning before they answer. The templates put it in a small greyed panel, <strong>the model's reasoning text</strong>, so the answer stays clear. It's worth reading, but it's more predicted text, not a window into how the model works. These models are also slower.</p>
+<h3>A note on breaking the rules</h3>
+<p>Small models sometimes ignore an instruction, especially strict ones like &quot;only ever ask questions&quot;. That's normal, and worth noticing. Try rewording the rule, putting it first, or saying it twice.</p>
+<h3>The simplest possible bot: a text file</h3>
+<p><code>Modelfile.txt</code> is a whole bot in a few lines: which model it runs on, and its instructions. It needs no browser and no setup line.</p>
+<ol>
+<li>Open it in a text editor, change the instructions between the triple quotes, and save.</li>
+<li>In Terminal or PowerShell, type <code>ollama create dot -f</code> and a space, drag <code>Modelfile.txt</code> into the window, and press Enter.</li>
+<li>Type <code>ollama run dot</code> to talk to it, and <code>/bye</code> to stop.</li>
+</ol>
+<p>Change <code>dot</code> to any name you like.</p>
+<h2>3. After the workshop</h2>
+<p>The code has two markers. Search a file for either word:</p>
+<ul>
+<li><strong>ADAPT</strong> marks things to change now, such as settings, labels and colours.</li>
+<li><strong>EXTEND</strong> marks places to build something new, each with a short note on what you could add and what it teaches. There are about a dozen in the chat file, fewer in mirror, and one in <code>style.css</code>.</li>
+</ul>
+<p>Go as far as you like, in any order.</p>
+<h3>Change what it is (settings only)</h3>
+<ul>
+<li><strong>Rewrite the instructions.</strong> The biggest changes come from here. Try a different personality, a stricter rule, or a different purpose.</li>
+<li><strong>Try other models.</strong> See <em>Finding more models</em> below. To change which model a bot starts with, change <code>model</code> in the settings.</li>
+<li><strong>Change the temperature.</strong> Lower is more predictable, higher is more surprising.</li>
+</ul>
+<h3>Finding more models</h3>
+<p><strong>Start with the Ollama library: <a href="https://ollama.com/library">ollama.com/library</a>.</strong> Every model there works with Ollama, and each page lists its sizes.</p>
+<ol>
+<li>Search for a model, or browse the list.</li>
+<li>Pick a size. The tag after the colon is the size, as in <code>ministral-3:3b</code>, where 3b means 3 billion parameters.</li>
+<li>Copy its name and run <code>ollama pull</code> followed by that name, for example <code>ollama pull ministral-3:3b</code>.</li>
+<li>Refresh the bot page. The new model appears in the menu.</li>
+</ol>
+<p><strong>Hugging Face (<a href="https://huggingface.co/models">huggingface.co</a>) has many thousands more,</strong> including small experimental and specialist models. It's busier and harder to read. Two things make it manageable:</p>
+<ul>
+<li><p><strong>Look for GGUF in the name.</strong> That's the file format Ollama can run. <a href="https://huggingface.co/models?pipeline_tag=text-generation&amp;library=gguf&amp;sort=trending">This search</a> shows only those models.</p>
+</li>
+<li><p><strong>Turn the page address into a command.</strong> Take the model's address, change <code>huggingface.co</code> to <code>hf.co</code>, and put <code>ollama pull</code> in front:</p>
+<pre><code>ollama pull hf.co/bartowski/Llama-3.2-1B-Instruct-GGUF
+</code></pre>
+<p>Ollama picks a sensible version of the file for you.</p>
+</li>
+</ul>
+<p><strong>Before you download, check three things:</strong></p>
+<ul>
+<li><strong>Size.</strong> The download size is roughly how much memory the model needs. Under about 4 GB suits most laptops. 8 GB or more needs a newer machine with plenty of memory.</li>
+<li><strong>Chat or instruct.</strong> For a bot, choose models with &quot;instruct&quot; or &quot;chat&quot; in the name, or that say so on their page. Base models only continue text.</li>
+<li><strong>The model card.</strong> This is the page that describes the model. Read who made it, what it was trained on (if they say), and its licence. Some licences limit what you can do with it.</li>
+</ul>
+<h3>A bigger build</h3>
+<p>For anyone who already codes, or wants to learn. These steps take the bot out of the browser, one at a time. Each builds on the last, and each is a small project in itself.</p>
+<ol>
+<li><strong>A script, not a page.</strong> Talk to Ollama from Python with its library (<code>pip install ollama</code>, see <a href="https://github.com/ollama/ollama-python">ollama-python</a>). Everything the templates do is a few lines there, and a script can read files, run on its own and talk to other programs. <em>Teaches: the bot as a program, not a page.</em></li>
+<li><strong>Find by meaning.</strong> Turn your notes into embeddings with <code>nomic-embed-text</code> (Ollama's <code>/api/embed</code>), save them, and find the closest ones to each message. Start with a plain file; move to a small database such as Chroma when you have a lot. <em>Teaches: how retrieval really works, and what &quot;similar&quot; means to a model.</em></li>
+<li><strong>A local voice.</strong> Listen with Whisper (<a href="https://github.com/ggml-org/whisper.cpp">whisper.cpp</a> runs well on laptops) and speak with Piper, a small text-to-speech tool. Both run on your laptop, so your voice stays there too. <em>Teaches: the full chain from sound to text to reply to sound, and where each part runs.</em></li>
+<li><strong>Let it act.</strong> Ollama supports &quot;tools&quot;: you describe a function, such as saving a note or checking the date, and the model can ask to use it. Or skip the model's choice and run the script on a schedule (cron on Mac, Task Scheduler on Windows). <em>Teaches: the difference between a bot that talks and one that does things.</em></li>
+<li><strong>Put it somewhere.</strong> Run it on a Raspberry Pi in a room, or on one shared computer that others reach over the network (see the <code>OLLAMA_URL</code> EXTEND note in the code). <em>Teaches: hosting, and who a bot belongs to once others use it.</em></li>
+</ol>
+<p>Write down your plan as a chain before you build it: <em>what goes in, what happens to it, what comes out, and where each step runs.</em> If a step needs the internet, decide whether that's fine.</p>
+<h3>Change how it feels (small edits)</h3>
+<ul>
+<li><strong>Fonts and colours.</strong> Open <code>style.css</code> in your text editor. The first three sections are the controls: fonts shared by every page, then colours for the chat bot, then colours for the mirror bot. Each value has a note saying what it changes. Save, then refresh the page.</li>
+<li><strong>Using Rubik and Roboto Mono.</strong> The pages are designed for these fonts. To use them without an internet connection, download them from <a href="https://fonts.google.com">Google Fonts</a>, make a folder called <code>fonts</code> in this folder, and save them there as <code>Rubik.woff2</code> and <code>RobotoMono.woff2</code>. Without them, the pages use your system's fonts.</li>
+<li><strong>Words on the screen.</strong> Change labels like &quot;Say something to begin&quot; or &quot;Reflect&quot; in the HTML.</li>
+<li><strong>How replies look.</strong> Ask for one sentence, a list of three words, or a postcard in the instructions, then style the reply to match.</li>
+</ul>
+<h3>Change how you interact with it</h3>
+<ul>
+<li><strong>No typing at all.</strong> Replace the chat box with one button that sends the same request each time, like drawing a card from a deck. Its instructions could be: &quot;Give me one short provocation for my work today.&quot;</li>
+<li><strong>Give it something to refer to.</strong> For a little, paste it into the instructions under a heading like &quot;What you know about me&quot;. For more, use <strong>notes it can search</strong>. To change how many passages it finds, change <code>HOW_MANY</code> in the chat file.</li>
+<li><strong>Make it find by meaning.</strong> Ollama can turn text into &quot;embeddings&quot; with a model like <code>nomic-embed-text</code>, so notes can be matched by meaning, not just shared words. This is the next step after the simple search, and needs a little more code.</li>
+<li><strong>Talk instead of typing.</strong> The chat bot has a microphone button, added by <code>voice.js</code>. Click it, speak, then click ■. A small Whisper speech model turns what you said into text in your browser, and puts it in the message box so you can check it before sending. The first click downloads the speech model (about 40 MB, not your voice), so that needs the internet. To change the speech model, or send straight away, see the settings at the top of <code>voice.js</code>. To remove the button, delete the <code>voice.js</code> line at the bottom of <code>chat.html</code>.</li>
+<li><strong>Why not the browser's own speech recognition?</strong> It's easier to code, but in Chrome your audio is sent to Google to be turned into text, and some setups of Safari send it to Apple. Try both, and notice the difference.</li>
+</ul>
+<h3>Give it a memory</h3>
+<p>Within one conversation, the bot already remembers: the whole conversation is sent each time, which you can see in &quot;prompt sent to model&quot;. Close the page and it forgets. A memory that lasts is the same idea: text that gets put back into the prompt. Each step below is a small change from the last.</p>
+<ol>
+<li><strong>Memory in the instructions.</strong> No code needed. Add a heading such as &quot;What you know about me&quot; to the instructions, and write a few lines under it. <em>Teaches: memory is just more text in the prompt.</em></li>
+<li><strong>A memory box that's kept.</strong> Add a box to the page for those lines, save what's in it with <code>localStorage</code>, and add it to the prompt each time, after the instructions. It survives closing the page, but only in that one browser. Add a &quot;forget everything&quot; button too, especially on a shared laptop. <em>Teaches: where memory is stored, and how easily it's lost.</em></li>
+<li><strong>The bot suggests what to remember.</strong> Add a &quot;remember this&quot; button under a reply. It sends the conversation back to the model with a request like &quot;Write one short line about me worth remembering&quot;, and adds the answer to the box, where you can edit or delete it. Small models often choose oddly. <em>Teaches: what it's like when something else decides what's worth keeping.</em></li>
+<li><strong>Memory as a file.</strong> Use a small script outside the browser (step 1 of <em>A bigger build</em>) to keep the memory in a text file in the bot's folder. It lasts across browsers, and you can open and read it like any other file. <em>Teaches: persistence, and memory you can inspect.</em></li>
+<li><strong>Memory that grows.</strong> Once there's too much to send every time, search past conversations for the parts that matter to each message, the same idea as <em>notes it can search</em>. This is roughly how commercial chatbots remember. <em>Teaches: why memory and retrieval are the same problem.</em></li>
+</ol>
+<p>Questions to design with, at any step:</p>
+<ul>
+<li>Who decides what's remembered: you, or the bot?</li>
+<li>Can you see all of it, change it, delete it?</li>
+<li>Where does it live, and who else can read it?</li>
+<li>When should it forget?</li>
+</ul>
+<p>Try asking the same questions of a commercial chatbot's memory.</p>
+<h3>Connect it to your practice</h3>
+<ul>
+<li><strong>Run it at a set time.</strong> A small script can send your notes to the model every evening and save the reflection, like a diary that writes back.</li>
+<li><strong>Keep its notes.</strong> The chat forgets your notes when you close the page. To keep them, or to watch a folder for changes, you'll need a small script outside the browser.</li>
+<li><strong>Link it to tools you already use</strong>, like a notes app or a drawing tool.</li>
+</ul>
+<p>A good place to start: which ideas from your blueprint didn't fit today?</p>
+<h2>If something goes wrong</h2>
+<h3>A yellow box says there's a typo</h3>
+<p>Something in the file can't be read, most often a missing backtick ( ` ), quote or comma in YOUR BOT. Undo your last change, or look near the line number it gives. Then save and refresh.</p>
+<h3>If the check page can't connect</h3>
+<p>Follow what the page says. If Ollama is closed, open it. If the page shows a setup line, paste it into Terminal or PowerShell. If it still won't connect, the text-file bot (<code>Modelfile.txt</code>) works without the browser.</p>
+<h3>&quot;The model isn't installed&quot;</h3>
+<p>Run <code>ollama pull</code> followed by the model name shown in the message, or pick a different model from the menu. If the menu says no models were found, open <code>check.html</code>.</p>
+<h3>Replies are very slow</h3>
+<p>The first reply is always slower while the model loads. If it stays slow, close other apps, try a smaller model, or pair up with someone.</p>
+<h2>Further reading</h2>
+<ul>
+<li><a href="https://docs.ollama.com">Ollama documentation</a> and <a href="https://ollama.com/library">model library</a></li>
+<li><a href="https://huggingface.co/docs/hub/en/ollama">Using Hugging Face models with Ollama</a></li>
+<li><a href="https://tracery.io">Tracery</a>, a tool for making generative text bots without a language model</li>
+<li>Kate Compton, <em>So you want to build a generator</em>, a friendly introduction to generative design</li>
+<li>Allison Parrish's teaching materials on computational poetry and text generation</li>
+<li><a href="https://collection.eliterature.org">The Electronic Literature Collection</a>, an archive of generative and electronic writing</li>
+</ul>
+
+</main>
+
+</div>
+
+<script>
+// A copy button on every block of commands or code.
+document.querySelectorAll("pre").forEach((pre) => {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "copy";
+  button.textContent = "copy";
+  button.addEventListener("click", async () => {
+    const text = pre.querySelector("code").innerText.trim();
+    try { await navigator.clipboard.writeText(text); }
+    catch (err) {
+      const area = document.createElement("textarea");
+      area.value = text; document.body.appendChild(area); area.select();
+      document.execCommand("copy"); area.remove();
+    }
+    button.textContent = "copied";
+    setTimeout(() => (button.textContent = "copy"), 1500);
+  });
+  pre.appendChild(button);
+});
+</script>
+</body>
+</html>
