@@ -20,6 +20,13 @@
 
 <main>
 <p>Two small bots that run entirely on your own laptop. Nothing you type is sent anywhere.</p>
+<h2>Download the templates</h2>
+<p><strong><a href="https://github.com/mahaliahr/diy-bot/archive/refs/heads/main.zip">Download the templates (zip)</a></strong></p>
+<ul>
+<li><strong>Mac:</strong> it unzips by itself into a folder called <code>diy-bot-main</code>, in your Downloads.</li>
+<li><strong>Windows:</strong> right-click the downloaded file and choose <strong>Extract All</strong>, then open the new folder. If you open the files inside the zip without extracting, your changes won't save.</li>
+</ul>
+<p>Then start with <em>Getting ready</em>, below. Here's what's in the folder:</p>
 <table>
 <thead>
 <tr>
@@ -47,6 +54,10 @@
 <tr>
   <td><code>style.css</code></td>
   <td>How every page looks: fonts, colours and layout.</td>
+</tr>
+<tr>
+  <td><code>fonts.css</code></td>
+  <td>The two fonts, stored inside a file. You don't need to edit it. Their licence is in <code>fonts-licence.txt</code>.</td>
 </tr>
 <tr>
   <td><code>Modelfile.txt</code></td>
@@ -191,7 +202,7 @@
 <h3>Change how it feels (small edits)</h3>
 <ul>
 <li><strong>Fonts and colours.</strong> Open <code>style.css</code> in your text editor. The first three sections are the controls: fonts shared by every page, then colours for the chat bot, then colours for the mirror bot. Each value has a note saying what it changes. Save, then refresh the page.</li>
-<li><strong>Using Rubik and Roboto Mono.</strong> The pages are designed for these fonts. To use them without an internet connection, download them from <a href="https://fonts.google.com">Google Fonts</a>, make a folder called <code>fonts</code> in this folder, and save them there as <code>Rubik.woff2</code> and <code>RobotoMono.woff2</code>. Without them, the pages use your system's fonts.</li>
+<li><strong>The fonts.</strong> Rubik and Roboto Mono are stored in <code>fonts.css</code>, so they work without the internet. To use other fonts, change the two names in section 1 of <code>style.css</code>. Any font installed on your laptop works by its name.</li>
 <li><strong>Words on the screen.</strong> Change labels like &quot;Say something to begin&quot; or &quot;Reflect&quot; in the HTML.</li>
 <li><strong>How replies look.</strong> Ask for one sentence, a list of three words, or a postcard in the instructions, then style the reply to match.</li>
 </ul>

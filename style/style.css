@@ -11,18 +11,17 @@
    to move things around.
    ===================================================================== */
 
+@import url("fonts.css");   /* the two fonts, stored in this folder */
+
 
 /* ---------------------------------------------------------------------
    1. ADAPT: fonts, shared by every page
 
-   The pages use Rubik and Roboto Mono if they're installed on this laptop
-   or saved in a "fonts" folder (as Rubik.woff2 and RobotoMono.woff2).
-   Otherwise they fall back to your system's fonts.
-   Nothing is downloaded from the internet.
+   The pages use Rubik and Roboto Mono, which come from fonts.css in this
+   folder. Nothing is downloaded from the internet.
+   To use other fonts, change the two names below. A font installed on your
+   laptop works by its name, for example "Georgia".
    --------------------------------------------------------------------- */
-
-@font-face { font-family: "Rubik"; src: local("Rubik"), url("fonts/Rubik.woff2") format("woff2"); font-weight: 300 700; }
-@font-face { font-family: "Roboto Mono"; src: local("Roboto Mono"), url("fonts/RobotoMono.woff2") format("woff2"); font-weight: 300 700; }
 
 :root {
   --font: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;   /* main text */

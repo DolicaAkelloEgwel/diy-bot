@@ -1,0 +1,4 @@
+# Files the website needs, but people downloading the templates don't.
+# GitHub leaves these out of the "Download ZIP" file.
+index.html export-ignore
+.gitattributes export-ignore

@@ -2,6 +2,16 @@
 
 Two small bots that run entirely on your own laptop. Nothing you type is sent anywhere.
 
+## Download the templates
+
+**[Download the templates (zip)](https://github.com/mahaliahr/diy-bot/archive/refs/heads/main.zip)**
+
+- **Mac:** it unzips by itself into a folder called `diy-bot-main`, in your Downloads.
+- **Windows:** right-click the downloaded file and choose **Extract All**, then open the new folder. If you open the files inside the zip without extracting, your changes won't save.
+
+Then start with *Getting ready*, below. Here's what's in the folder:
+
+
 | File | What it is |
 |---|---|
 | `check.html` | Gets everything ready, step by step. Open this first. |
@@ -9,6 +19,7 @@ Two small bots that run entirely on your own laptop. Nothing you type is sent an
 | `mirror.html` | A bot that doesn't chat. Give it some of your writing and it reflects it back. |
 | `voice.js` | Adds a microphone button to the chat bot. Speech is turned into text on your laptop. |
 | `style.css` | How every page looks: fonts, colours and layout. |
+| `fonts.css` | The two fonts, stored inside a file. You don't need to edit it. Their licence is in `fonts-licence.txt`. |
 | `Modelfile.txt` | The simplest possible bot: a text file and a model, no browser needed. |
 | `guide.html` | This guide, as a page. Open it in your browser. |
 | `README.md` | The same guide, as plain text. |
@@ -176,7 +187,7 @@ Write down your plan as a chain before you build it: *what goes in, what happens
 ### Change how it feels (small edits)
 
 - **Fonts and colours.** Open `style.css` in your text editor. The first three sections are the controls: fonts shared by every page, then colours for the chat bot, then colours for the mirror bot. Each value has a note saying what it changes. Save, then refresh the page.
-- **Using Rubik and Roboto Mono.** The pages are designed for these fonts. To use them without an internet connection, download them from [Google Fonts](https://fonts.google.com), make a folder called `fonts` in this folder, and save them there as `Rubik.woff2` and `RobotoMono.woff2`. Without them, the pages use your system's fonts.
+- **The fonts.** Rubik and Roboto Mono are stored in `fonts.css`, so they work without the internet. To use other fonts, change the two names in section 1 of `style.css`. Any font installed on your laptop works by its name.
 - **Words on the screen.** Change labels like "Say something to begin" or "Reflect" in the HTML.
 - **How replies look.** Ask for one sentence, a list of three words, or a postcard in the instructions, then style the reply to match.
 
